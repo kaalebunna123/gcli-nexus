@@ -1,2 +1,2 @@
-pub mod gemini_request;
 pub mod auth;
+pub mod gemini_request;

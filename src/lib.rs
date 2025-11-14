@@ -1,11 +1,11 @@
+pub mod api;
 pub mod config;
+pub mod db;
 pub mod error;
 pub mod google_oauth;
-pub mod service;
-pub mod router;
 pub mod middleware;
-pub mod db;
-pub mod api;
+pub mod router;
+pub mod service;
 pub mod types;
 
 pub use error::NexusError;

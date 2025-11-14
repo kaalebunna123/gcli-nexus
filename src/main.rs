@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use mimalloc::MiMalloc;
 use tokio::net::TcpListener;
 use tracing::{info, warn};
@@ -35,23 +33,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Spawn credentials actor; it will load active credentials from DB automatically
     let handle = gcli_nexus::service::credentials_actor::spawn().await;
 
-    if cfg.load_cred {
-        let cred_dir = Path::new("credentials");
-        match gcli_nexus::service::credential_loader::load_from_dir(cred_dir) {
+    if let Some(cred_path) = cfg.cred_path.as_ref() {
+        match gcli_nexus::service::credential_loader::load_from_dir(cred_path) {
             Ok(files) if !files.is_empty() => {
                 info!(
-                    path = %cred_dir.display(),
+                    path = %cred_path.display(),
                     count = files.len(),
                     "submitting credentials loaded from filesystem"
                 );
                 handle.submit_credentials(files).await;
             }
             Ok(_) => {
-                info!(path = %cred_dir.display(), "no credential files discovered");
+                info!(path = %cred_path.display(), "no credential files discovered");
             }
             Err(e) => {
                 warn!(
-                    path = %cred_dir.display(),
+                    path = %cred_path.display(),
                     error = %e,
                     "failed to load credentials from directory"
                 );

@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::{path::PathBuf, sync::LazyLock};
 
 use figment::{
     Figment,
@@ -35,9 +35,9 @@ pub struct Config {
     /// Env: `BIGMODEL_LIST`. Default: empty.
     pub bigmodel_list: Vec<String>,
 
-    /// Whether to auto-load credentials from ./credentials at startup.
-    /// Env: `LOAD_CRED`. Default: `false`.
-    pub load_cred: bool,
+    /// Optional directory containing credential files to preload at startup.
+    /// Env: `CRED_PATH`. Example: `./credentials`. Default: unset (skip preload).
+    pub cred_path: Option<PathBuf>,
 }
 
 impl Default for Config {
@@ -50,7 +50,7 @@ impl Default for Config {
             nexus_key: String::new(),
             refresh_concurrency: 10,
             bigmodel_list: Vec::new(),
-            load_cred: false,
+            cred_path: None,
         }
     }
 }

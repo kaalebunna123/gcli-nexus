@@ -49,4 +49,3 @@ impl From<DbCredential> for GoogleCredential {
         }
     }
 }
-
