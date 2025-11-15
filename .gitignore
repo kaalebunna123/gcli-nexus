@@ -32,3 +32,4 @@ target
 *.json
 config.toml
 credentials
+*.sh

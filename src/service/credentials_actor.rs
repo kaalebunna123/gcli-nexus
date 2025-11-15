@@ -63,6 +63,8 @@ pub enum CredentialsActorMessage {
     },
     /// Report invalid/expired access (e.g. 401/403); refresh then re-enqueue.
     ReportInvalid { id: CredentialId },
+    /// Report a credential as banned/unusable; remove from queues and storage.
+    ReportBaned { id: CredentialId },
 
     /// Submit a batch of credentials and trigger one refresh pass for each.
     SubmitCredentials(Vec<GoogleCredential>),
@@ -109,6 +111,11 @@ impl CredentialsHandle {
     /// Report invalid/expired (401/403); the actor will refresh before reuse.
     pub async fn report_invalid(&self, id: CredentialId) {
         let _ = ractor::cast!(self.actor, CredentialsActorMessage::ReportInvalid { id });
+    }
+
+    /// Report a credential as permanently banned/unusable; remove it entirely.
+    pub async fn report_baned(&self, id: CredentialId) {
+        let _ = ractor::cast!(self.actor, CredentialsActorMessage::ReportBaned { id });
     }
 
     /// Submit new credentials to the actor and trigger refresh for each.
@@ -283,6 +290,9 @@ impl Actor for CredentialsActor {
                 let pid = state.project_id_of(id).unwrap_or("-");
                 info!("ID: {id}, Project: {pid}, invalid reported; starting refresh");
                 self.handle_report_invalid(state, &myself, id).await;
+            }
+            CredentialsActorMessage::ReportBaned { id } => {
+                self.handle_report_baned(state, id).await;
             }
             CredentialsActorMessage::SubmitCredentials(creds_vec) => {
                 self.handle_submit_credentials(state, &myself, creds_vec)
@@ -476,6 +486,28 @@ impl CredentialsActor {
                 warn!("ID: {id}, Failed to enqueue refresh job: {}", e);
             }
         }
+    }
+
+    async fn handle_report_baned(&self, state: &mut CredentialsActorState, id: CredentialId) {
+        let project = state
+            .project_id_of(id)
+            .map(|p| p.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let removed_cred = state.creds.remove(&id).is_some();
+        state.remove_from_all_queues(id);
+        let removed_cooldown = state.clear_from_cooldowns(id);
+        let removed_refresh = state.refreshing.remove(&id);
+        if let Err(e) = state.storage.set_status(id, false).await {
+            warn!(
+                "ID: {id}, Project: {project}, ban report failed to update DB status: {}",
+                e
+            );
+            return;
+        }
+        info!(
+            "ID: {id}, Project: {project}, credential banned; removed_cred={}, removed_cooldown={}, removed_refreshing={}",
+            removed_cred, removed_cooldown, removed_refresh
+        );
     }
 
     async fn handle_submit_credentials(

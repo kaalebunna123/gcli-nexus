@@ -34,7 +34,7 @@ impl GoogleOauthService {
             builder = builder.proxy(proxy);
         }
         if !CONFIG.enable_multiplexing {
-            builder = builder.http1_only();
+            builder = builder.http1_only().pool_max_idle_per_host(0);
         }
         let client = builder
             .build()

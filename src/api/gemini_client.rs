@@ -135,8 +135,11 @@ impl GeminiClient {
                                 .await;
                             info!("Project: {}, rate limit reported", assigned.project_id);
                         }
-                        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+                        StatusCode::UNAUTHORIZED => {
                             handle.report_invalid(assigned.id).await;
+                        }
+                        StatusCode::FORBIDDEN => {
+                            handle.report_baned(assigned.id).await;
                         }
                         _ => {}
                     }
