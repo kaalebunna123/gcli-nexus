@@ -54,7 +54,7 @@ impl ModelTier {
 #[derive(Debug)]
 pub enum CredentialsActorMessage {
     /// Request one available credential for the given model. Err if none available.
-    GetCredential(String, RpcReplyPort<Result<AssignedCredential, NexusError>>),
+    GetCredential(String, RpcReplyPort<Option<AssignedCredential>>),
     /// Report rate limiting; start cooldown then re-enqueue when complete.
     ReportRateLimit {
         id: CredentialId,
@@ -87,23 +87,31 @@ pub struct CredentialsHandle {
 
 impl CredentialsHandle {
     /// Request a credential based on target model. Returns error if none available.
-    pub async fn get_credential(&self, model_name: &str) -> Result<AssignedCredential, NexusError> {
+    pub async fn get_credential(
+        &self,
+        model_name: impl AsRef<str>,
+    ) -> Result<Option<AssignedCredential>, NexusError> {
         ractor::call!(
             self.actor,
             CredentialsActorMessage::GetCredential,
-            model_name.to_string()
+            model_name.as_ref().to_string()
         )
-        .map_err(|e| NexusError::RactorError(format!("rpc call failed: {}", e)))?
+        .map_err(|e| NexusError::RactorError(format!("GetCredential RPC failed:: {e}")))
     }
 
     /// Report rate limit; the actor will cool down this credential before reuse.
-    pub async fn report_rate_limit(&self, id: CredentialId, model_name: &str, cooldown: Duration) {
+    pub async fn report_rate_limit(
+        &self,
+        id: CredentialId,
+        model_name: impl AsRef<str>,
+        cooldown: Duration,
+    ) {
         let _ = ractor::cast!(
             self.actor,
             CredentialsActorMessage::ReportRateLimit {
                 id,
                 cooldown,
-                model_name: model_name.to_string()
+                model_name: model_name.as_ref().to_string()
             }
         );
     }
@@ -350,7 +358,7 @@ impl CredentialsActor {
     async fn handle_get_credential(
         &self,
         state: &mut CredentialsActorState,
-        reply_port: RpcReplyPort<Result<AssignedCredential, NexusError>>,
+        reply_port: RpcReplyPort<Option<AssignedCredential>>,
         myself: &ActorRef<CredentialsActorMessage>,
         model_name: String,
     ) {
@@ -383,7 +391,7 @@ impl CredentialsActor {
                 access_token: token,
             };
             state.push_back_for_tier(id, tier);
-            let _ = reply_port.send(Ok(assigned));
+            let _ = reply_port.send(Some(assigned));
             return;
         }
         warn!(
@@ -393,7 +401,7 @@ impl CredentialsActor {
             state.cooling_down_big.len(),
             state.cooling_down_tiny.len()
         );
-        let _ = reply_port.send(Err(NexusError::NoAvailableCredential));
+        let _ = reply_port.send(None);
     }
 
     fn handle_report_rate_limit(

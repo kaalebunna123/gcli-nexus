@@ -1,14 +1,17 @@
 use axum::{
+    Json,
     body::Bytes,
     http::{HeaderMap, StatusCode},
+    response::IntoResponse,
 };
-use sqlx::Error as SqlxError;
-use thiserror::Error as ThisError;
-
-// Shorten long oauth2 type paths used below.
 use oauth2::basic::BasicErrorResponseType;
 use oauth2::reqwest::Error as ReqwestClientError;
 use oauth2::{HttpClientError, RequestTokenError, StandardErrorResponse};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sqlx::Error as SqlxError;
+use std::collections::HashMap;
+use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum NexusError {
@@ -33,7 +36,7 @@ pub enum NexusError {
     #[error("OAuth2 server error: {error}")]
     Oauth2Server { error: String },
 
-    #[error("no available credential in queue")]
+    #[error("No available credential")]
     NoAvailableCredential,
 
     #[error("Ractor error: {0}")]
@@ -42,15 +45,14 @@ pub enum NexusError {
     #[error("Database error: {0}")]
     DatabaseError(#[from] SqlxError),
 
-    #[error("credential acquisition failed: {0}")]
-    CredentialAcquire(String),
-
     #[error("upstream HTTP error: {status}")]
     UpstreamHttp {
         status: StatusCode,
         headers: HeaderMap,
         body: Bytes,
     },
+    #[error("Gemini API error: {0:?}")]
+    GeminiServerError(GeminiError),
 }
 
 impl NexusError {}
@@ -80,4 +82,96 @@ impl
             RequestTokenError::Other(s) => NexusError::Oauth2Token(s),
         }
     }
+}
+impl IntoResponse for NexusError {
+    fn into_response(self) -> axum::response::Response {
+        let (status, error_body) = match self {
+            NexusError::GeminiServerError(gemini_err) => {
+                let status = StatusCode::from_u16(gemini_err.error.code as u16)
+                    .unwrap_or(StatusCode::BAD_REQUEST);
+
+                let body = ApiErrorBody {
+                    code: gemini_err.error.status,
+                    message: gemini_err.error.message,
+                };
+                (status, body)
+            }
+            NexusError::DatabaseError(_) | NexusError::RactorError(_) => {
+                let status = StatusCode::INTERNAL_SERVER_ERROR;
+                let body = ApiErrorBody {
+                    code: "INTERNAL_ERROR".to_string(),
+                    message: "An internal server error occurred.".to_string(),
+                };
+                (status, body)
+            }
+            NexusError::Json(_)
+            | NexusError::Oauth2Token(_)
+            | NexusError::Oauth2Server { .. }
+            | NexusError::MissingAccessToken
+            | NexusError::MissingEmailInUserinfo => {
+                let status = StatusCode::UNAUTHORIZED;
+                let body = ApiErrorBody {
+                    code: "UNAUTHORIZED".to_string(),
+                    message: "Authentication error.".to_string(),
+                };
+                (status, body)
+            }
+            NexusError::NoAvailableCredential => {
+                let status = StatusCode::SERVICE_UNAVAILABLE; // 503
+                let body = ApiErrorBody {
+                    code: "NO_CREDENTIAL".to_string(),
+                    message: "No available credentials to process the request.".to_string(),
+                };
+                (status, body)
+            }
+            NexusError::Reqwest(_) | NexusError::UrlParse(_) => {
+                let status = StatusCode::BAD_GATEWAY;
+                let body = ApiErrorBody {
+                    code: "BAD_GATEWAY".to_string(),
+                    message: "Upstream service is unavailable.".to_string(),
+                };
+                (status, body)
+            }
+            NexusError::UpstreamHttp {
+                status,
+                headers,
+                body,
+            } => {
+                let status = status;
+                let body = ApiErrorBody {
+                    code: "BAD_GATEWAY".to_string(),
+                    message: "Upstream service is unavailable.".to_string(),
+                };
+                (status, body)
+            }
+        };
+        (status, Json(ApiErrorResponse { error: error_body })).into_response()
+    }
+}
+
+/// Standardized API error response body
+#[derive(Serialize)]
+pub struct ApiErrorBody {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Serialize)]
+pub struct ApiErrorResponse {
+    pub error: ApiErrorBody,
+}
+
+/// Gemini API error response structure
+#[derive(Deserialize, Debug)]
+pub struct GeminiError {
+    pub error: GeminiErrorBody,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct GeminiErrorBody {
+    pub code: u32,
+    pub message: String,
+    pub status: String,
+    #[serde(flatten)]
+    pub extra: HashMap<String, Value>,
 }

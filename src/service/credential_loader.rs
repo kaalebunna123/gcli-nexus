@@ -1,25 +1,18 @@
-use std::fs;
+use std::{fs, io};
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use tracing::{info, warn};
 
-use crate::error::NexusError;
 use crate::google_oauth::credentials::GoogleCredential;
 
 /// Load credential JSON files from a directory into GoogleCredential structs.
-pub fn load_from_dir(dir: &Path) -> Result<Vec<GoogleCredential>, NexusError> {
+pub fn load_from_dir(dir: &Path) -> io::Result<Vec<GoogleCredential>> {
     if !dir.exists() {
         info!(path = %dir.display(), "credentials directory not found; skipping load");
         return Ok(Vec::new());
     }
-    let iter = fs::read_dir(dir).map_err(|e| {
-        NexusError::CredentialAcquire(format!(
-            "failed to read credentials dir {}: {}",
-            dir.display(),
-            e
-        ))
-    })?;
+    let iter = fs::read_dir(dir)?;
     let loaded: Vec<GoogleCredential> = iter
         .filter_map(|entry| match entry {
             Ok(e) => Some(e.path()),

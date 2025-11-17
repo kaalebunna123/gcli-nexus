@@ -41,8 +41,8 @@ struct CliPostFormatBody {
 impl GeminiClient {
     pub fn new(client: reqwest::Client) -> Self {
         let retry_policy = ExponentialBuilder::default()
-            .with_min_delay(Duration::from_secs(3))
-            .with_max_delay(Duration::from_secs(5))
+            .with_min_delay(Duration::from_millis(200))
+            .with_max_delay(Duration::from_millis(1000))
             .with_max_times(2);
         Self {
             client,
@@ -74,23 +74,10 @@ impl GeminiClient {
                 let client = client.clone();
                 let base_payload = base_payload.clone();
                 async move {
-                    let assigned =
-                        handle
-                            .get_credential(&ctx.model)
-                            .await
-                            .map_err(|e| match e {
-                                NexusError::NoAvailableCredential => {
-                                    error!("no available credential when getting credential");
-                                    NexusError::NoAvailableCredential
-                                }
-                                other => {
-                                    error!(error = %other, "credential acquisition failed");
-                                    NexusError::CredentialAcquire(format!(
-                                        "credential acquisition failed: {}",
-                                        other
-                                    ))
-                                }
-                            })?;
+                    let assigned = handle
+                        .get_credential(&ctx.model)
+                        .await?
+                        .ok_or(NexusError::NoAvailableCredential)?;
                     info!(
                         "Using credential ID: {} Project: {}",
                         assigned.id, assigned.project_id
@@ -199,7 +186,7 @@ impl GeminiClient {
                 )
                     .into_response()
             }
-            Err(NexusError::CredentialAcquire(msg)) => {
+            Err(NexusError::RactorError(msg)) => {
                 error!(error = %msg, "credential acquisition failed");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
