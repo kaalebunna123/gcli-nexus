@@ -33,30 +33,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = gcli_nexus::config::CONFIG.nexus_key.len();
 
     let handle = gcli_nexus::service::credentials_actor::spawn().await;
-
+    let handle_clone = handle.clone();
     if let Some(cred_path) = cfg.cred_path.as_ref() {
-        match gcli_nexus::service::credential_loader::load_from_dir(cred_path) {
-            Ok(files) if !files.is_empty() => {
-                info!(
-                    path = %cred_path.display(),
-                    count = files.len(),
-                    "submitting credentials loaded from filesystem"
-                );
-                handle.submit_credentials(files).await;
-            }
-            Ok(_) => {
-                info!(path = %cred_path.display(), "no credential files discovered");
-            }
-            Err(e) => {
-                warn!(
-                    path = %cred_path.display(),
-                    error = %e,
-                    "failed to load credentials from directory"
-                );
-            }
-        }
-    }
+        tokio::spawn(async move {
+            info!(path = %cred_path.display(), "Background task: starting credential loading...");
 
+            match gcli_nexus::service::credential_loader::load_from_dir(cred_path) {
+                Ok(files) if !files.is_empty() => {
+                    let count = files.len();
+                    info!(
+                        count,
+                        "Background task: files loaded from filesystem, submitting to actor..."
+                    );
+
+                    // This await now only blocks this background task, not the server start
+                    handle_clone.submit_credentials(files).await;
+
+                    info!(
+                        count,
+                        "Background task: all credentials successfully submitted."
+                    );
+                }
+                Ok(_) => {
+                    info!(
+                        path = %cred_path.display(),
+                        "Background task: no credential files discovered in directory."
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        path = %cred_path.display(),
+                        error = %e,
+                        "Background task: failed to load credentials from directory."
+                    );
+                }
+            }
+        });
+    }
     // Build axum router and serve
     let state = gcli_nexus::router::NexusState::new(handle.clone());
     let app = gcli_nexus::router::nexus_router(state);

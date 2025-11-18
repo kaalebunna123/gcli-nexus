@@ -77,6 +77,11 @@ pub enum CredentialsActorMessage {
         id: CredentialId,
         result: Result<GoogleCredential, NexusError>,
     },
+    /// A credential has been refreshed and stored; activate it in memory queues.
+    ActivateCredential {
+        id: CredentialId,
+        credential: GoogleCredential,
+    },
 }
 
 /// Handle for interacting with the credentials actor.
@@ -348,6 +353,13 @@ impl Actor for CredentialsActor {
                     }
                 }
             }
+            CredentialsActorMessage::ActivateCredential { id, credential } => {
+                let project = credential.project_id.clone();
+                state.remove_from_all_queues(id);
+                state.creds.insert(id, credential);
+                state.push_back_all(id);
+                info!("ID: {id}, Project: {project}, submitted and activated");
+            }
         }
         Ok(())
     }
@@ -520,49 +532,67 @@ impl CredentialsActor {
     async fn handle_submit_credentials(
         &self,
         state: &mut CredentialsActorState,
-        _myself: &ActorRef<CredentialsActorMessage>,
+        myself: &ActorRef<CredentialsActorMessage>,
         creds_vec: Vec<GoogleCredential>,
     ) {
+        let count = creds_vec.len();
+        info!(
+            count,
+            "Received batch credentials submission, dispatching background tasks..."
+        );
+        let refresh_tx = state.refresh_tx.clone();
+        let storage = state.storage.clone();
+
         for cred in creds_vec.into_iter() {
             let pid = cred.project_id.clone();
-            let (tx_done, rx_done) = oneshot::channel();
-            let job = RefreshJob {
-                cred,
-                respond_to: tx_done,
-            };
-            if let Err(e) = state.refresh_tx.send(job) {
-                warn!(
-                    "Project: {pid}, failed to enqueue refresh before insert: {}",
-                    e
-                );
-                continue;
-            }
-            let refreshed = match rx_done.await {
-                Ok(Ok(updated)) => updated,
-                Ok(Err(e)) => {
-                    warn!("Project: {pid}, refresh before insert failed: {}", e);
-                    continue;
-                }
-                Err(e) => {
+            let refresh_tx = refresh_tx.clone();
+            let storage = storage.clone();
+            let myself = myself.clone();
+
+            tokio::spawn(async move {
+                let (tx_done, rx_done) = oneshot::channel();
+                let job = RefreshJob {
+                    cred,
+                    respond_to: tx_done,
+                };
+                if let Err(e) = refresh_tx.send(job) {
                     warn!(
-                        "Project: {pid}, refresh channel closed before insert: {}",
+                        "Project: {pid}, failed to enqueue refresh before insert: {}",
                         e
                     );
-                    continue;
+                    return;
                 }
-            };
-            match state.storage.upsert(refreshed.clone(), true).await {
-                Ok(id) => {
-                    state.remove_from_all_queues(id);
-                    state.creds.insert(id, refreshed);
-                    state.push_back_all(id);
-                    info!("ID: {id}, Project: {pid}, submitted and activated");
+                let refreshed = match rx_done.await {
+                    Ok(Ok(updated)) => updated,
+                    Ok(Err(e)) => {
+                        warn!("Project: {pid}, refresh before insert failed: {}", e);
+                        return;
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Project: {pid}, refresh channel closed before insert: {}",
+                            e
+                        );
+                        return;
+                    }
+                };
+                match storage.upsert(refreshed.clone(), true).await {
+                    Ok(id) => {
+                        let _ = ractor::cast!(
+                            myself,
+                            CredentialsActorMessage::ActivateCredential {
+                                id,
+                                credential: refreshed
+                            }
+                        );
+                    }
+                    Err(e) => {
+                        warn!("Project: {pid}, upsert failed: {}", e);
+                    }
                 }
-                Err(e) => {
-                    warn!("Project: {pid}, upsert failed: {}", e);
-                }
-            }
+            });
         }
+        debug!(count, "Dispatch complete, actor is free.");
     }
 }
 

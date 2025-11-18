@@ -2,7 +2,7 @@ use crate::error::NexusError;
 use chrono::Duration;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GoogleCredential {
@@ -95,7 +95,7 @@ impl GoogleCredential {
             self.scopes = Some(arr);
         }
 
-        info!(
+        debug!(
             "Project_ID {}, Credentials updated successfully",
             self.project_id
         );
