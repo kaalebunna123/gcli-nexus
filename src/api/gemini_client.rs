@@ -18,7 +18,7 @@ use serde_json::json;
 use std::{io, time::Duration};
 use tracing::{error, info, warn};
 
-use crate::error::{GeminiError, NexusError};
+use crate::error::{GeminiError, IsRetryable, NexusError};
 use crate::middleware::gemini_request::{GeminiContext, GeminiRequestBody};
 use crate::router::NexusState;
 use crate::types::cli::{cli_bytes_to_aistudio, cli_str_to_aistudio};
@@ -186,18 +186,7 @@ impl GeminiClient {
         };
 
         op.retry(&self.retry_policy)
-            .when(|err: &NexusError| match err {
-                NexusError::GeminiServerError(e) => {
-                    let status = e.error.status.as_str();
-                    matches!(
-                        status,
-                        "RESOURCE_EXHAUSTED" | "UNAUTHENTICATED" | "PERMISSION_DENIED"
-                    )
-                }
-
-                NexusError::ReqwestError(_) => true,
-                _ => false,
-            })
+            .when(|err: &NexusError| err.is_retryable())
             .await
     }
 

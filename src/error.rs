@@ -192,16 +192,28 @@ impl GeminiError {
     }
 }
 
-pub trait Retryable {
+pub trait IsRetryable {
     fn is_retryable(&self) -> bool;
 }
 
-impl Retryable for NexusError {
+impl IsRetryable for NexusError {
     fn is_retryable(&self) -> bool {
         match self {
             NexusError::ReqwestError(_) => true,
+            NexusError::GeminiServerError(e) => match e.error.status.as_str() {
+                "RESOURCE_EXHAUSTED" => true,
+                "UNAUTHENTICATED" => true,
+                "PERMISSION_DENIED" => true,
+                _ => false,
+            },
+            NexusError::UpstreamStatus(status) => match *status {
+                reqwest::StatusCode::TOO_MANY_REQUESTS => true,
+                reqwest::StatusCode::UNAUTHORIZED => true,
+                reqwest::StatusCode::FORBIDDEN => true,
+                _ => false,
+            },
+            NexusError::Oauth2Server { .. } => false,
             NexusError::UnexpectedError(_) => false,
-
             _ => false,
         }
     }

@@ -1,7 +1,7 @@
 use super::endpoints::GoogleOauthEndpoints;
-use crate::config::CONFIG;
 use crate::error::NexusError;
 use crate::google_oauth::credentials::GoogleCredential;
+use crate::{config::CONFIG, error::IsRetryable};
 use backon::{ExponentialBuilder, Retryable};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -19,6 +19,12 @@ pub struct GoogleOauthService {
     client: reqwest::Client,
     retry_policy: ExponentialBuilder,
     refresh_tx: mpsc::UnboundedSender<RefreshJob>,
+}
+
+impl Default for GoogleOauthService {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GoogleOauthService {
@@ -171,15 +177,7 @@ async fn refresh_inner(
     let payload =
         (|| async { GoogleOauthEndpoints::refresh_access_token(creds, client.clone()).await })
             .retry(retry_policy)
-            .when(|e: &NexusError| match e {
-                // reqwest::Error retryable
-                NexusError::ReqwestError(_) => true,
-                NexusError::UnexpectedError(_) => true,
-                // ServerResponse do not retry
-                NexusError::Oauth2Server { .. } => false,
-                // other errors do not retry
-                _ => false,
-            })
+            .when(|e: &NexusError| e.is_retryable())
             .await?;
     let mut payload: Value = serde_json::to_value(&payload)?;
     debug!("Token response payload: {}", payload);
@@ -201,10 +199,4 @@ async fn refresh_inner(
     }
     creds.update_credential(&payload)?;
     Ok(())
-}
-
-impl Default for GoogleOauthService {
-    fn default() -> Self {
-        Self::new()
-    }
 }

@@ -343,14 +343,23 @@ impl Actor for CredentialsActor {
                         }
                         state.push_back_all(id);
                     }
-                    Err(e) => {
-                        error!("ID: {id}, Refresh failed; removing credential: {}", e);
-                        state.creds.remove(&id);
-                        state.remove_from_all_queues(id);
-                        if let Err(e2) = state.storage.set_status(id, false).await {
-                            warn!("ID: {id}, DB set_status(false) failed: {}", e2);
+                    Err(e) => match e {
+                        NexusError::Oauth2Server { .. } => {
+                            error!("ID: {id}, Refresh failed; removing credential: {}", e);
+                            state.creds.remove(&id);
+                            state.remove_from_all_queues(id);
+                            if let Err(db_err) = state.storage.set_status(id, false).await {
+                                warn!("ID: {id}, DB set_status(false) failed: {}", db_err);
+                            }
                         }
-                    }
+                        _ => {
+                            warn!(
+                                "ID: {id}, Refresh failed due to network/env (Transient): {}. Keeping credential.",
+                                e
+                            );
+                            state.push_back_all(id);
+                        }
+                    },
                 }
             }
             CredentialsActorMessage::ActivateCredential { id, credential } => {
