@@ -41,7 +41,10 @@ impl GoogleOauthService {
         if !CONFIG.enable_multiplexing {
             headers.insert(CONNECTION, HeaderValue::from_static("close"));
 
-            builder = builder.http1_only().pool_max_idle_per_host(0);
+            builder = builder
+                .http1_only()
+                .pool_max_idle_per_host(0)
+                .pool_idle_timeout(Duration::from_secs(0));
         } else {
             builder = builder.http2_adaptive_window(true);
         }
@@ -52,7 +55,7 @@ impl GoogleOauthService {
         let retry_policy = ExponentialBuilder::default()
             .with_min_delay(Duration::from_secs(1))
             .with_max_delay(Duration::from_secs(3))
-            .with_max_times(2)
+            .with_max_times(3)
             .with_jitter();
 
         // Refresh pipeline: unbounded channel + concurrent worker
