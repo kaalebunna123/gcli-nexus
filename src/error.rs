@@ -113,7 +113,7 @@ impl IntoResponse for NexusError {
                 (status, body)
             }
             NexusError::NoAvailableCredential => {
-                let status = StatusCode::CONFLICT;
+                let status = StatusCode::SERVICE_UNAVAILABLE;
                 let body = ApiErrorBody {
                     code: "NO_CREDENTIAL".to_string(),
                     message: "No available credentials to process the request.".to_string(),
