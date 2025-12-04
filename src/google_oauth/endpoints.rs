@@ -24,7 +24,7 @@ pub(crate) struct GoogleOauthEndpoints;
 
 const LOAD_CODE_ASSIST_URL: &str = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
 const ONBOARD_CODE_ASSIST_URL: &str =
-    "https://cloudcode-pa.googleapis.com/v1internal:onboardCodeAssist";
+    "https://cloudcode-pa.googleapis.com/v1internal:onboardUser";
 const IDE_TYPE: &str = "IDE_UNSPECIFIED";
 const PLATFORM: &str = "PLATFORM_UNSPECIFIED";
 const PLUGIN_TYPE: &str = "GEMINI";
